@@ -79,34 +79,37 @@ def atomic_write(path: str, data: Dict[str, Any]):
 # Weather batching
 # -------------------------
 
-async def fetch_weather_batch(
-    keys: List[Tuple[float, float, str]]
-) -> Dict[Tuple[float, float, str], Dict]:
-
+async def fetch_weather_batch(keys):
     results = {}
     async with httpx.AsyncClient(timeout=10.0) as client:
         for lat, lng, hour in keys:
-            url = "https://archive-api.open-meteo.com/v1/archive"
-            params = {
-                "latitude": lat,
-                "longitude": lng,
-                "start_date": hour[:10],  # just the date part "2026-04-27"
-                "end_date": hour[:10],
-                "hourly": "temperature_2m,precipitation_sum,windspeed_10m,weathercode,visibility",
-                "timezone": "auto"
-            }
-
             try:
-                r = await client.get(url, params=params)
-                data = r.json()
+                response = await client.get(
+                    'https://archive-api.open-meteo.com/v1/archive',
+                    params=[
+                        ('latitude', lat),
+                        ('longitude', lng),
+                        ('start_date', hour[:10]),
+                        ('end_date', hour[:10]),
+                        ('hourly', 'temperature_2m'),
+                        ('hourly', 'rain'),
+                        ('hourly', 'windspeed_10m'),
+                        ('hourly', 'weathercode'),
+                        ('timezone', 'auto')
+                    ]
+                )
+                data = response.json()
+                hour_index = int(hour[11:13])  # extract hour from "2026-04-27T11:00"
 
                 results[(lat, lng, hour)] = {
-                    "temperature": data["hourly"]["temperature_2m"][0],
-                    "weathercode": data["hourly"]["weathercode"][0],
+                    'temp_celsius': data['hourly']['temperature_2m'][hour_index],
+                    'rain_mm': data['hourly']['rain'][hour_index],
+                    'wind_kmh': data['hourly']['windspeed_10m'][hour_index],
+                    'weathercode': data['hourly']['weathercode'][hour_index],
                 }
 
-            except Exception:
-                results[(lat, lng, hour)] = {"error": "weather_failed"}
+            except Exception as e:
+                results[(lat, lng, hour)] = {'error': 'weather_failed'}
 
     return results
 
