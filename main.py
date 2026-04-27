@@ -85,27 +85,28 @@ async def fetch_weather_batch(
 
     results = {}
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for lat, lon, hour in keys:
-            url = "https://api.open-meteo.com/v1/forecast"
+        for lat, lng, hour in keys:
+            url = "https://archive-api.open-meteo.com/v1/archive"
             params = {
                 "latitude": lat,
-                "longitude": lon,
-                "hourly": "temperature_2m,weathercode",
-                "start": hour,
-                "end": hour,
+                "longitude": lng,
+                "start_date": hour[:10],  # just the date part "2026-04-27"
+                "end_date": hour[:10],
+                "hourly": "temperature_2m,precipitation_sum,windspeed_10m,weathercode,visibility",
+                "timezone": "auto"
             }
 
             try:
                 r = await client.get(url, params=params)
                 data = r.json()
 
-                results[(lat, lon, hour)] = {
+                results[(lat, lng, hour)] = {
                     "temperature": data["hourly"]["temperature_2m"][0],
                     "weathercode": data["hourly"]["weathercode"][0],
                 }
 
             except Exception:
-                results[(lat, lon, hour)] = {"error": "weather_failed"}
+                results[(lat, lng, hour)] = {"error": "weather_failed"}
 
     return results
 
@@ -143,7 +144,7 @@ async def weather_worker():
             dt = datetime.fromisoformat(payload["started_at"])
             hour = dt.strftime("%Y-%m-%dT%H:00")
 
-            key = (first["lat"], first["lon"], hour)
+            key = (first["lat"], first["lng"], hour)
 
             jobs.append((path, payload, key))
             weather_keys.add(key)
